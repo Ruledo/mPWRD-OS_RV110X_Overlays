@@ -368,7 +368,6 @@ function board_side_bsp_cli_postinst_update_uboot_bootscript() {
 			rv110x_bootargs=$(sed -E \
 				-e 's/(^| )androidboot\.fwver=[^ ]+//g' \
 				-e 's/(^| )user_debug=[^ ]+//g' \
-				-e 's/(^| )rv110x_stage=[^ ]*//g' \
 				-e 's/[[:space:]]+/ /g' \
 				-e 's/^ //; s/ $//' /proc/cmdline)
 		fi
