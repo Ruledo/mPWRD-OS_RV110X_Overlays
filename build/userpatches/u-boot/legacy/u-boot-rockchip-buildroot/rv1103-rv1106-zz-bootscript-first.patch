@@ -89,6 +89,7 @@ index 0000000..98d4098
 +			"if env import -t ${scratch_addr_r} ${filesize}; then " \
 +				"if test -z \"${rootdev}\"; then setenv rootdev /dev/mmcblk0p1; fi; " \
 +				"if test -z \"${rootfstype}\"; then setenv rootfstype ext4; fi; " \
++				"true; " \
 +			"else " \
 +				"test 0 = 1; " \
 +			"fi; " \
@@ -99,7 +100,7 @@ index 0000000..98d4098
 +		"if test -n \"${rv110x_bootargs}\"; then " \
 +			"setenv bootargs ${rv110x_bootargs}; " \
 +		"else " \
-+			"setenv consoleargs; " \
++			"setenv consoleargs \"\"; " \
 +			"if test \"${logo}\" = disabled; then setenv logo logo.nologo; fi; " \
 +			"if test \"${console}\" = display || test \"${console}\" = both; then setenv consoleargs console=tty1; fi; " \
 +			"if test \"${console}\" = serial || test \"${console}\" = both; then setenv consoleargs console=ttyFIQ0,115200n8 ${consoleargs}; fi; " \
@@ -134,6 +135,8 @@ index 0000000..98d4098
 +				"fi; " \
 +			"done; " \
 +			"if test \"${overlay_error}\" = true; then echo Error applying DT overlays, restoring original DT; load mmc 1:1 ${fdt_addr_r} /boot/dtb/${fdtfile} && setenv overlay_error false; else true; fi; " \
++		"else " \
++			"true; " \
 +		"fi\0" \
 +	"rv110x_boot_linux=bootz ${kernel_addr_r} ${ramdisk_addr_r}:${rv110x_ramdisk_size} ${fdt_addr_r}\0"
 +
