@@ -63,7 +63,7 @@ new file mode 100644
 index 0000000..98d4098
 --- /dev/null
 +++ b/include/configs/rv110x_armbian.h
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,77 @@
 +/* SPDX-License-Identifier: GPL-2.0+ */
 +/*
 + * Shared Armbian boot flow for RV1103/RV1106.
