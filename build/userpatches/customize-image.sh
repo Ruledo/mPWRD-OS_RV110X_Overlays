@@ -153,18 +153,25 @@ EnableExtlinuxUserOverlays() {
 	fi
 } # EnableExtlinuxUserOverlays
 
-ShouldUseArmbianEnvUserOverlays() {
+GetArmbianEnvValue() {
+	local key="$1"
+	if [ -f /boot/armbianEnv.txt ]; then
+		sed -n "s/^${key}=//p" /boot/armbianEnv.txt | head -n 1
+	fi
+} # GetArmbianEnvValue
+
+UsesArmbianEnvOverlayMode() {
 	if [ "${BOOT_OVERLAY_MODE:-}" = "armbianEnv" ]; then
 		return 0
 	fi
-	if [ -f /boot/armbianEnv.txt ] && grep -q '^boot_overlay_mode=armbianEnv$' /boot/armbianEnv.txt; then
+	if [ "$(GetArmbianEnvValue boot_overlay_mode)" = "armbianEnv" ]; then
 		return 0
 	fi
 	if HasLegacyBootscriptOverlayMode; then
 		return 0
 	fi
 	return 1
-} # ShouldUseArmbianEnvUserOverlays
+} # UsesArmbianEnvOverlayMode
 
 HasLegacyBootscriptOverlayMode() {
 	[ -f /boot/boot.cmd ] && grep -q '^setenv overlay_error' /boot/boot.cmd
@@ -181,9 +188,7 @@ EnsureArmbianEnvListContains() {
 		return 1
 	fi
 
-	if grep -q "^${key}=" /boot/armbianEnv.txt; then
-		current_values=$(sed -n "s/^${key}=//p" /boot/armbianEnv.txt | head -n 1)
-	fi
+	current_values="$(GetArmbianEnvValue "${key}")"
 
 	for value in "$@"; do
 		if ! grep -qE "(^|[[:space:]])${value}([[:space:]]|$)" <<< "${current_values}"; then
@@ -209,7 +214,7 @@ EnableUserDTOverlay() {
 	read -r -a overlay_names <<< "${user_overlays}"
 	# Enable overlays (space separated)
 	# in /boot/armbianEnv.txt or /boot/extlinux/extlinux.conf
-	if ShouldUseArmbianEnvUserOverlays; then
+	if UsesArmbianEnvOverlayMode; then
 		EnsureArmbianEnvListContains "user_overlays" "${overlay_names[@]}"
 	elif [ -f /boot/extlinux/extlinux.conf ]; then
 		EnableExtlinuxUserOverlays "${overlay_names[@]}"

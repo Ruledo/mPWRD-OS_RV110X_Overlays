@@ -50,6 +50,37 @@ has_legacy_bootscript_overlay_mode() {
 	[[ -f /boot/boot.cmd ]] && grep -q '^setenv overlay_error' /boot/boot.cmd
 }
 
+uses_armbian_env_overlay_mode() {
+	[[ -f /boot/armbianEnv.txt ]] || return 1
+	if [[ "${boot_overlay_mode}" == "armbianEnv" ]]; then
+		return 0
+	fi
+	has_legacy_bootscript_overlay_mode
+}
+
+ensure_armbian_env_list_contains() {
+	local key="$1"
+	local value="$2"
+	local current_values=""
+
+	[[ -f /boot/armbianEnv.txt ]] || return 1
+
+	current_values="$(get_armbian_env_value "${key}")"
+	if grep -qE "(^|[[:space:]])${value}([[:space:]]|$)" <<< "${current_values}"; then
+		echo "Overlay ${value} was already added to /boot/armbianEnv.txt, skipping"
+		return 0
+	fi
+
+	if [[ -n "${current_values}" ]]; then
+		current_values="${current_values} ${value}"
+	else
+		current_values="${value}"
+	fi
+
+	sed -i "/^${key}=/d" /boot/armbianEnv.txt
+	printf '%s=%s\n' "${key}" "${current_values}" >> /boot/armbianEnv.txt
+}
+
 boot_overlay_mode="${BOOT_OVERLAY_MODE:-}"
 if [[ -z "${boot_overlay_mode}" ]]; then
 	boot_overlay_mode="$(get_armbian_env_value boot_overlay_mode)"
@@ -73,9 +104,7 @@ enable_extlinux_overlay() {
 	fi
 }
 
-if [[ "${boot_overlay_mode}" == "armbianEnv" ]] && [[ -f /boot/armbianEnv.txt ]]; then
-	boot_mode="armbianEnv"
-elif has_legacy_bootscript_overlay_mode && [[ -f /boot/armbianEnv.txt ]]; then
+if uses_armbian_env_overlay_mode; then
 	boot_mode="armbianEnv"
 elif [[ -f "${extlinux_conf}" ]]; then
 	boot_mode="extlinux"
@@ -125,18 +154,7 @@ cp "${temp_dir}/${fname}.dtbo" "/boot/overlay-user/${fname}.dtbo"
 if [[ ${boot_mode} == "extlinux" ]]; then
 	enable_extlinux_overlay "${fname}"
 else
-	if grep -q '^user_overlays=' /boot/armbianEnv.txt; then
-		line=$(grep '^user_overlays=' /boot/armbianEnv.txt | cut -d'=' -f2)
-		if grep -qE "(^|[[:space:]])${fname}([[:space:]]|$)" <<< "${line}"; then
-			echo "Overlay ${fname} was already added to /boot/armbianEnv.txt, skipping"
-		elif grep -q '^user_overlays=\s*$' /boot/armbianEnv.txt; then
-			sed -i -e "s/^user_overlays=\s*$/user_overlays=${fname}/" /boot/armbianEnv.txt
-		else
-			sed -i -e "/^user_overlays=/ s/$/ ${fname}/" /boot/armbianEnv.txt
-		fi
-	else
-		sed -i -e "\$auser_overlays=${fname}" /boot/armbianEnv.txt
-	fi
+	ensure_armbian_env_list_contains "user_overlays" "${fname}"
 fi
 
 echo "Reboot is required to apply the changes"

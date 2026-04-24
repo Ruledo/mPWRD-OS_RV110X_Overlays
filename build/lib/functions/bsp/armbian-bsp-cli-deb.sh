@@ -334,6 +334,32 @@ function get_bootscript_info() {
 	debug_dict bootscript_info
 }
 
+function board_side_uses_armbian_env_overlay_mode() {
+	[[ -f /boot/armbianEnv.txt ]] || return 1
+	if [[ ${BOOT_OVERLAY_MODE:-} == armbianEnv ]]; then
+		return 0
+	fi
+	grep -q '^boot_overlay_mode=armbianEnv$' /boot/armbianEnv.txt
+}
+
+function board_side_armbian_env_set_key() {
+	local key="$1"
+	local value="$2"
+	sed -i "/^${key}=/d" /boot/armbianEnv.txt
+	printf '%s=%s\n' "${key}" "${value}" >> /boot/armbianEnv.txt
+}
+
+function board_side_armbian_env_rootdev_value() {
+	local rootdev="$1"
+	local rootdev_extra_args=""
+	rootdev_extra_args=$(sed -n 's/^rootdev=[^[:space:]]\+[[:space:]]\+\(.*\)$/\1/p' /boot/armbianEnv.txt | head -n 1)
+	if [[ -n ${rootdev_extra_args} ]]; then
+		printf '%s %s' "${rootdev}" "${rootdev_extra_args}"
+	else
+		printf '%s' "${rootdev}"
+	fi
+}
+
 function board_side_bsp_cli_postinst_update_uboot_bootscript() {
 	if [[ ${BOOTSCRIPT_FORCE_UPDATE} == yes || ! -f /boot/${BOOTSCRIPT_DST} ]]; then
 
@@ -378,15 +404,9 @@ function board_side_bsp_cli_postinst_update_uboot_bootscript() {
 		fi
 		if [[ -f /boot/armbianEnv.txt ]]; then
 			if [[ ${rootdev_is_bootable} == "yes" ]]; then
-				if [[ ${BOOT_OVERLAY_MODE:-} == armbianEnv ]] || grep -q '^boot_overlay_mode=armbianEnv$' /boot/armbianEnv.txt; then
-					rootdev_extra_args=$(sed -n 's/^rootdev=[^[:space:]]\+[[:space:]]\+\(.*\)$/\1/p' /boot/armbianEnv.txt | head -n 1)
-					sed -i '/^rootdev=/d;/^rootfstype=/d' /boot/armbianEnv.txt
-					if [[ -n ${rootdev_extra_args} ]]; then
-						printf 'rootdev=%s %s\n' "${rootdev}" "${rootdev_extra_args}" >> /boot/armbianEnv.txt
-					else
-						printf 'rootdev=%s\n' "${rootdev}" >> /boot/armbianEnv.txt
-					fi
-					printf 'rootfstype=%s\n' "${rootfstype}" >> /boot/armbianEnv.txt
+				if board_side_uses_armbian_env_overlay_mode; then
+					board_side_armbian_env_set_key "rootdev" "$(board_side_armbian_env_rootdev_value "${rootdev}")"
+					board_side_armbian_env_set_key "rootfstype" "${rootfstype}"
 				else
 					sed -i "s|^rootdev=\\\$rootdev\$|rootdev=${rootdev}|" /boot/armbianEnv.txt
 					sed -i "s|^rootfstype=\\\$rootfstype\$|rootfstype=${rootfstype}|" /boot/armbianEnv.txt
@@ -395,8 +415,7 @@ function board_side_bsp_cli_postinst_update_uboot_bootscript() {
 				fi
 			fi
 			if [[ ${capture_rv110x_bootargs} == "yes" ]]; then
-				sed -i '/^rv110x_bootargs=/d' /boot/armbianEnv.txt
-				printf 'rv110x_bootargs=%s\n' "${rv110x_bootargs}" >> /boot/armbianEnv.txt
+				board_side_armbian_env_set_key "rv110x_bootargs" "${rv110x_bootargs}"
 			fi
 		fi
 
