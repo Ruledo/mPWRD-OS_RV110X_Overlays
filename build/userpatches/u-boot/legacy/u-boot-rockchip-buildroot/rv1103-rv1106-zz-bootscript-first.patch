@@ -1,87 +1,17 @@
 diff --git a/include/configs/rv1103b_common.h b/include/configs/rv1103b_common.h
---- a/include/configs/rv1103b_common.h	2026-04-22 20:02:52.073346467 -0700
-+++ b/include/configs/rv1103b_common.h	2026-04-22 20:36:47.141926712 -0700
-@@ -65,11 +65,88 @@
+index 3a9bf6c..0a7028f 100644
+--- a/include/configs/rv1103b_common.h
++++ b/include/configs/rv1103b_common.h
+@@ -65,11 +65,15 @@
  	"ramdisk_addr_r=0x02400000\0"	\
  	"fdt_high=0x03900000\0"	\
  	"initrd_high=0x03900000\0"	\
 -	"load_addr=0x02000000\0"
-+	"load_addr=0x03000000\0"
++	"load_addr=0x02000000\0"	\
++	"scratch_addr_r=0x03000000\0"
  #endif
  
-+#define RV110X_ARMBIAN_BOOT_SETTINGS	\
-+	"rv110x_prepare=" \
-+		"setenv overlay_error false; " \
-+		"setenv rootdev /dev/mmcblk0p1; " \
-+		"setenv verbosity 1; " \
-+		"setenv console both; " \
-+		"setenv bootlogo false; " \
-+		"setenv rootfstype ext4; " \
-+		"setenv docker_optimizations on; " \
-+		"setenv earlycon off; " \
-+		"setenv rv110x_stage prepare_done\0" \
-+	"rv110x_import_env=" \
-+		"if load mmc 1:1 ${load_addr} /boot/armbianEnv.txt; then " \
-+			"setenv rv110x_stage env_file_loaded; " \
-+			"if env import -t ${load_addr} ${filesize}; then " \
-+				"setenv rv110x_stage env_imported; " \
-+				"if test -z \"${rootdev}\"; then setenv rootdev /dev/mmcblk0p1; fi; " \
-+				"if test -z \"${rootfstype}\"; then setenv rootfstype ext4; fi; " \
-+				"setenv rv110x_stage env_sanitized; " \
-+			"else " \
-+				"setenv rv110x_stage env_import_failed; test 0 = 1; " \
-+			"fi; " \
-+		"else " \
-+			"setenv rv110x_stage env_file_missing; test 0 = 1; " \
-+		"fi\0" \
-+	"rv110x_setup_bootargs=" \
-+		"if test -n \"${rv110x_bootargs}\"; then " \
-+			"setenv bootargs ${rv110x_bootargs}; " \
-+			"setenv rv110x_stage bootargs_from_env; " \
-+		"else " \
-+			"setenv consoleargs; " \
-+			"if test \"${logo}\" = disabled; then setenv logo logo.nologo; fi; " \
-+			"if test \"${console}\" = display || test \"${console}\" = both; then setenv consoleargs console=tty1; fi; " \
-+			"if test \"${console}\" = serial || test \"${console}\" = both; then setenv consoleargs console=ttyFIQ0,115200n8 ${consoleargs}; fi; " \
-+			"if test \"${earlycon}\" = on; then setenv consoleargs earlycon ${consoleargs}; fi; " \
-+			"if test \"${bootlogo}\" = true; then setenv consoleargs splash plymouth.ignore-serial-consoles ${consoleargs}; else setenv consoleargs splash=verbose ${consoleargs}; fi; " \
-+			"part uuid mmc 1:1 partuuid; " \
-+			"setenv bootargs root=${rootdev} rootwait rootfstype=${rootfstype} ${consoleargs} consoleblank=0 loglevel=${verbosity} ubootpart=${partuuid} usb-storage.quirks=${usbstoragequirks} ${extraargs} ${extraboardargs}; " \
-+			"if test \"${docker_optimizations}\" = on; then setenv bootargs ${bootargs} cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory; fi; " \
-+			"setenv rv110x_stage bootargs_done; " \
-+		"fi\0" \
-+	"rv110x_load_images=" \
-+		"if test -z \"${fdtfile}\"; then " \
-+			"echo Missing fdtfile in /boot/armbianEnv.txt; " \
-+			"setenv rv110x_stage missing_fdtfile; " \
-+			"test 0 = 1; " \
-+		"else " \
-+			"load mmc 1:1 ${ramdisk_addr_r} /boot/uInitrd && setenv rv110x_ramdisk_size ${filesize} && setenv rv110x_stage initrd_loaded && " \
-+			"load mmc 1:1 ${kernel_addr_r} /boot/zImage && setenv rv110x_stage kernel_loaded && " \
-+			"load mmc 1:1 ${fdt_addr_r} /boot/dtb/${fdtfile} && setenv rv110x_stage fdt_loaded; " \
-+		"fi\0" \
-+	"rv110x_apply_overlays=" \
-+		"if test -n \"${overlays}${user_overlays}\"; then " \
-+			"setenv rv110x_stage overlays_present; " \
-+			"fdt addr ${fdt_addr_r} && fdt resize 65536 && setenv rv110x_stage overlay_tree_ready; " \
-+			"for overlay_file in ${overlays}; do " \
-+				"if load mmc 1:1 ${load_addr} /boot/dtb/overlay/${overlay_prefix}-${overlay_file}.dtbo; then " \
-+					"echo Applying kernel provided DT overlay ${overlay_prefix}-${overlay_file}.dtbo; " \
-+					"fdt apply ${load_addr} || setenv overlay_error true; " \
-+				"fi; " \
-+			"done; " \
-+			"for overlay_file in ${user_overlays}; do " \
-+				"if load mmc 1:1 ${load_addr} /boot/overlay-user/${overlay_file}.dtbo; then " \
-+					"echo Applying user provided DT overlay ${overlay_file}.dtbo; " \
-+					"fdt apply ${load_addr} || setenv overlay_error true; " \
-+				"fi; " \
-+			"done; " \
-+			"setenv rv110x_stage overlays_processed; " \
-+			"if test \"${overlay_error}\" = true; then echo Error applying DT overlays, restoring original DT; load mmc 1:1 ${fdt_addr_r} /boot/dtb/${fdtfile} && setenv rv110x_stage overlay_restore_done; else true; fi; " \
-+		"else " \
-+			"setenv rv110x_stage no_overlays; " \
-+		"fi\0" \
-+	"rv110x_boot_linux=setenv rv110x_stage boot_linux; bootz ${kernel_addr_r} ${ramdisk_addr_r}:${rv110x_ramdisk_size} ${fdt_addr_r}\0"
++#include "rv110x_armbian.h"
 +
  #define CONFIG_EXTRA_ENV_SETTINGS	\
  	ENV_MEM_LAYOUT_SETTINGS		\
@@ -89,27 +19,61 @@ diff --git a/include/configs/rv1103b_common.h b/include/configs/rv1103b_common.h
  	ROCKCHIP_DEVICE_SETTINGS	\
  	RKIMG_DET_BOOTDEV
  
-@@ -79,8 +156,7 @@
- 	"boot_fit;"
+@@ -80,7 +84,7 @@
  #else
  #define RKIMG_BOOTCOMMAND		\
--	"setenv bootargs;"	\
+ 	"setenv bootargs;"	\
 -	"sysboot mmc 1:1 any ${scriptaddr} /boot/extlinux/extlinux.conf;"
-+	"setenv bootargs; run rv110x_prepare; if run rv110x_import_env; then if run rv110x_setup_bootargs && run rv110x_load_images && run rv110x_apply_overlays; then run rv110x_boot_linux; fi; fi; setenv rv110x_stage fallback_extlinux_from_${rv110x_stage}; sysboot mmc 1:1 any ${scriptaddr} /boot/extlinux/extlinux.conf;"
++	"run rv110x_prepare; if run rv110x_import_env; then if run rv110x_setup_bootargs && run rv110x_load_images && run rv110x_apply_overlays; then run rv110x_boot_linux; fi; fi; setenv rv110x_stage fallback_extlinux_from_${rv110x_stage}; sysboot mmc 1:1 any ${scriptaddr} /boot/extlinux/extlinux.conf;"
  #endif
  
  /* Update define for tiny image */
 diff --git a/include/configs/rv1106_common.h b/include/configs/rv1106_common.h
---- a/include/configs/rv1106_common.h	2026-04-22 20:02:52.073346467 -0700
-+++ b/include/configs/rv1106_common.h	2026-04-22 20:36:47.141926712 -0700
-@@ -75,11 +75,88 @@
+index 357805b..24e384c 100644
+--- a/include/configs/rv1106_common.h
++++ b/include/configs/rv1106_common.h
+@@ -75,11 +75,15 @@
  	"ramdisk_addr_r=0x02400000\0"	\
  	"fdt_high=0x03900000\0"	\
  	"initrd_high=0x03900000\0"	\
 -	"load_addr=0x02000000\0"
-+	"load_addr=0x03000000\0"
++	"load_addr=0x02000000\0"	\
++	"scratch_addr_r=0x03000000\0"
  #endif
  
++#include "rv110x_armbian.h"
++
+ #define CONFIG_EXTRA_ENV_SETTINGS	\
+ 	ENV_MEM_LAYOUT_SETTINGS		\
++	RV110X_ARMBIAN_BOOT_SETTINGS	\
+ 	ROCKCHIP_DEVICE_SETTINGS	\
+ 	RKIMG_DET_BOOTDEV
+ 
+@@ -90,7 +94,7 @@
+ #else
+ #define RKIMG_BOOTCOMMAND		\
+ 	"setenv bootargs;"	\
+-	"sysboot mmc 1:1 any ${scriptaddr} /boot/extlinux/extlinux.conf;"
++	"run rv110x_prepare; if run rv110x_import_env; then if run rv110x_setup_bootargs && run rv110x_load_images && run rv110x_apply_overlays; then run rv110x_boot_linux; fi; fi; setenv rv110x_stage fallback_extlinux_from_${rv110x_stage}; sysboot mmc 1:1 any ${scriptaddr} /boot/extlinux/extlinux.conf;"
+ #endif
+ 
+ /* Update define for tiny image */
+diff --git a/include/configs/rv110x_armbian.h b/include/configs/rv110x_armbian.h
+new file mode 100644
+index 0000000..1832405
+--- /dev/null
++++ b/include/configs/rv110x_armbian.h
+@@ -0,0 +1,85 @@
++/* SPDX-License-Identifier: GPL-2.0+ */
++/*
++ * Shared Armbian boot flow for RV1103/RV1106.
++ * Keep env imports and overlay loads on a dedicated scratch buffer so
++ * temporary data does not reuse load_addr.
++ */
++
++#ifndef __RV110X_ARMBIAN_H
++#define __RV110X_ARMBIAN_H
++
 +#define RV110X_ARMBIAN_BOOT_SETTINGS	\
 +	"rv110x_prepare=" \
 +		"setenv overlay_error false; " \
@@ -122,9 +86,9 @@ diff --git a/include/configs/rv1106_common.h b/include/configs/rv1106_common.h
 +		"setenv earlycon off; " \
 +		"setenv rv110x_stage prepare_done\0" \
 +	"rv110x_import_env=" \
-+		"if load mmc 1:1 ${load_addr} /boot/armbianEnv.txt; then " \
++		"if load mmc 1:1 ${scratch_addr_r} /boot/armbianEnv.txt; then " \
 +			"setenv rv110x_stage env_file_loaded; " \
-+			"if env import -t ${load_addr} ${filesize}; then " \
++			"if env import -t ${scratch_addr_r} ${filesize}; then " \
 +				"setenv rv110x_stage env_imported; " \
 +				"if test -z \"${rootdev}\"; then setenv rootdev /dev/mmcblk0p1; fi; " \
 +				"if test -z \"${rootfstype}\"; then setenv rootfstype ext4; fi; " \
@@ -166,15 +130,15 @@ diff --git a/include/configs/rv1106_common.h b/include/configs/rv1106_common.h
 +			"setenv rv110x_stage overlays_present; " \
 +			"fdt addr ${fdt_addr_r} && fdt resize 65536 && setenv rv110x_stage overlay_tree_ready; " \
 +			"for overlay_file in ${overlays}; do " \
-+				"if load mmc 1:1 ${load_addr} /boot/dtb/overlay/${overlay_prefix}-${overlay_file}.dtbo; then " \
++				"if load mmc 1:1 ${scratch_addr_r} /boot/dtb/overlay/${overlay_prefix}-${overlay_file}.dtbo; then " \
 +					"echo Applying kernel provided DT overlay ${overlay_prefix}-${overlay_file}.dtbo; " \
-+					"fdt apply ${load_addr} || setenv overlay_error true; " \
++					"fdt apply ${scratch_addr_r} || setenv overlay_error true; " \
 +				"fi; " \
 +			"done; " \
 +			"for overlay_file in ${user_overlays}; do " \
-+				"if load mmc 1:1 ${load_addr} /boot/overlay-user/${overlay_file}.dtbo; then " \
++				"if load mmc 1:1 ${scratch_addr_r} /boot/overlay-user/${overlay_file}.dtbo; then " \
 +					"echo Applying user provided DT overlay ${overlay_file}.dtbo; " \
-+					"fdt apply ${load_addr} || setenv overlay_error true; " \
++					"fdt apply ${scratch_addr_r} || setenv overlay_error true; " \
 +				"fi; " \
 +			"done; " \
 +			"setenv rv110x_stage overlays_processed; " \
@@ -184,19 +148,4 @@ diff --git a/include/configs/rv1106_common.h b/include/configs/rv1106_common.h
 +		"fi\0" \
 +	"rv110x_boot_linux=setenv rv110x_stage boot_linux; bootz ${kernel_addr_r} ${ramdisk_addr_r}:${rv110x_ramdisk_size} ${fdt_addr_r}\0"
 +
- #define CONFIG_EXTRA_ENV_SETTINGS	\
- 	ENV_MEM_LAYOUT_SETTINGS		\
-+	RV110X_ARMBIAN_BOOT_SETTINGS	\
- 	ROCKCHIP_DEVICE_SETTINGS	\
- 	RKIMG_DET_BOOTDEV
- 
-@@ -89,8 +166,7 @@
- 	"boot_fit;"
- #else
- #define RKIMG_BOOTCOMMAND		\
--	"setenv bootargs;"	\
--	"sysboot mmc 1:1 any ${scriptaddr} /boot/extlinux/extlinux.conf;"
-+	"setenv bootargs; run rv110x_prepare; if run rv110x_import_env; then if run rv110x_setup_bootargs && run rv110x_load_images && run rv110x_apply_overlays; then run rv110x_boot_linux; fi; fi; setenv rv110x_stage fallback_extlinux_from_${rv110x_stage}; sysboot mmc 1:1 any ${scriptaddr} /boot/extlinux/extlinux.conf;"
- #endif
- 
- /* Update define for tiny image */
++#endif
