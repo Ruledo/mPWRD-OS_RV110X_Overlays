@@ -154,14 +154,53 @@ EnableExtlinuxUserOverlays() {
 } # EnableExtlinuxUserOverlays
 
 ShouldUseArmbianEnvUserOverlays() {
-	if [ -f /boot/boot.cmd ] && grep -q '^setenv overlay_error' /boot/boot.cmd; then
+	if [ "${BOOT_OVERLAY_MODE:-}" = "armbianEnv" ]; then
 		return 0
 	fi
-	if [ -f /boot/armbianEnv.txt ] && [ "${LINUXFAMILY}" = "rockchip-rv1106" ]; then
+	if [ -f /boot/armbianEnv.txt ] && grep -q '^boot_overlay_mode=armbianEnv$' /boot/armbianEnv.txt; then
+		return 0
+	fi
+	if HasLegacyBootscriptOverlayMode; then
 		return 0
 	fi
 	return 1
 } # ShouldUseArmbianEnvUserOverlays
+
+HasLegacyBootscriptOverlayMode() {
+	[ -f /boot/boot.cmd ] && grep -q '^setenv overlay_error' /boot/boot.cmd
+} # HasLegacyBootscriptOverlayMode
+
+EnsureArmbianEnvListContains() {
+	local key="$1"
+	shift
+	local value
+	local current_values=""
+
+	if [ ! -f /boot/armbianEnv.txt ]; then
+		echo "Warning: /boot/armbianEnv.txt not found, cannot update ${key}"
+		return 1
+	fi
+
+	if grep -q "^${key}=" /boot/armbianEnv.txt; then
+		current_values=$(sed -n "s/^${key}=//p" /boot/armbianEnv.txt | head -n 1)
+	fi
+
+	for value in "$@"; do
+		if ! grep -qE "(^|[[:space:]])${value}([[:space:]]|$)" <<< "${current_values}"; then
+			if [ -n "${current_values}" ]; then
+				current_values="${current_values} ${value}"
+			else
+				current_values="${value}"
+			fi
+		fi
+	done
+
+	if grep -q "^${key}=" /boot/armbianEnv.txt; then
+		sed -i "s|^${key}=.*|${key}=${current_values}|" /boot/armbianEnv.txt
+	else
+		echo "${key}=${current_values}" >> /boot/armbianEnv.txt
+	fi
+} # EnsureArmbianEnvListContains
 
 EnableUserDTOverlay() {
 	local user_overlays="$1"
@@ -171,13 +210,7 @@ EnableUserDTOverlay() {
 	# Enable overlays (space separated)
 	# in /boot/armbianEnv.txt or /boot/extlinux/extlinux.conf
 	if ShouldUseArmbianEnvUserOverlays; then
-		if grep -q "user_overlays=" /boot/armbianEnv.txt; then
-			# Append to existing user_overlays
-			sed -i "s/user_overlays=\(.*\)/user_overlays=\1 ${user_overlays}/" /boot/armbianEnv.txt
-		else
-			# Add new user_overlays line
-			echo "user_overlays=${user_overlays}" >> /boot/armbianEnv.txt
-		fi
+		EnsureArmbianEnvListContains "user_overlays" "${overlay_names[@]}"
 	elif [ -f /boot/extlinux/extlinux.conf ]; then
 		EnableExtlinuxUserOverlays "${overlay_names[@]}"
 	else
@@ -190,13 +223,7 @@ EnableKernelDTOverlay() {
 	echo "Enabling kernel (builtin) overlay: ${OVERLAY_NAME}"
 	# Enable overlay in /boot/armbianEnv.txt
 	if [ -f /boot/armbianEnv.txt ]; then
-		if grep -q "overlays=" /boot/armbianEnv.txt; then
-			# Append to existing overlays
-			sed -i "s/overlays=\(.*\)/overlays=\1 ${OVERLAY_NAME}/" /boot/armbianEnv.txt
-		else
-			# Add new overlays line
-			echo "overlays=${OVERLAY_NAME}" >> /boot/armbianEnv.txt
-		fi
+		EnsureArmbianEnvListContains "overlays" "${OVERLAY_NAME}"
 	else
 		echo "Warning: /boot/armbianEnv.txt not found, cannot enable device tree overlays"
 	fi

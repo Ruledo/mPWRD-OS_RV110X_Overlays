@@ -2,4 +2,5 @@ verbosity=1
 bootlogo=false
 fdtfile=rv1103g-luckfox-pico-mini.dtb
 overlay_prefix=rv1106
+boot_overlay_mode=armbianEnv
 extraargs=cma=0 video=off udev.children-max=1 coherent_pool=2M

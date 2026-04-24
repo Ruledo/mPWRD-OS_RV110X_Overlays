@@ -108,6 +108,7 @@ function compile_armbian-bsp-cli() {
 		KERNEL_TEST_TARGET=$KERNEL_TEST_TARGET
 		FORCE_BOOTSCRIPT_UPDATE=$FORCE_BOOTSCRIPT_UPDATE
 		FORCE_UBOOT_UPDATE=$FORCE_UBOOT_UPDATE
+		BOOT_OVERLAY_MODE="${BOOT_OVERLAY_MODE:-}"
 		OVERLAY_DIR="$OVERLAY_DIR"
 		VENDOR="$VENDOR"
 		VENDORCOLOR="$VENDORCOLOR"
@@ -367,7 +368,6 @@ function board_side_bsp_cli_postinst_update_uboot_bootscript() {
 			rv110x_bootargs=$(sed -E \
 				-e 's/(^| )androidboot\.fwver=[^ ]+//g' \
 				-e 's/(^| )user_debug=[^ ]+//g' \
-				-e 's/(^| )rv110x_stage=[^ ]*//g' \
 				-e 's/[[:space:]]+/ /g' \
 				-e 's/^ //; s/ $//' /proc/cmdline)
 		fi
@@ -378,10 +378,21 @@ function board_side_bsp_cli_postinst_update_uboot_bootscript() {
 		fi
 		if [[ -f /boot/armbianEnv.txt ]]; then
 			if [[ ${rootdev_is_bootable} == "yes" ]]; then
-				sed -i "s|^rootdev=\\\$rootdev\$|rootdev=${rootdev}|" /boot/armbianEnv.txt
-				sed -i "s|^rootfstype=\\\$rootfstype\$|rootfstype=${rootfstype}|" /boot/armbianEnv.txt
-				grep -q '^rootdev=' /boot/armbianEnv.txt || echo "rootdev=${rootdev}" >> /boot/armbianEnv.txt
-				grep -q '^rootfstype=' /boot/armbianEnv.txt || echo "rootfstype=${rootfstype}" >> /boot/armbianEnv.txt
+				if [[ ${BOOT_OVERLAY_MODE:-} == armbianEnv ]] || grep -q '^boot_overlay_mode=armbianEnv$' /boot/armbianEnv.txt; then
+					rootdev_extra_args=$(sed -n 's/^rootdev=[^[:space:]]\+[[:space:]]\+\(.*\)$/\1/p' /boot/armbianEnv.txt | head -n 1)
+					sed -i '/^rootdev=/d;/^rootfstype=/d' /boot/armbianEnv.txt
+					if [[ -n ${rootdev_extra_args} ]]; then
+						printf 'rootdev=%s %s\n' "${rootdev}" "${rootdev_extra_args}" >> /boot/armbianEnv.txt
+					else
+						printf 'rootdev=%s\n' "${rootdev}" >> /boot/armbianEnv.txt
+					fi
+					printf 'rootfstype=%s\n' "${rootfstype}" >> /boot/armbianEnv.txt
+				else
+					sed -i "s|^rootdev=\\\$rootdev\$|rootdev=${rootdev}|" /boot/armbianEnv.txt
+					sed -i "s|^rootfstype=\\\$rootfstype\$|rootfstype=${rootfstype}|" /boot/armbianEnv.txt
+					grep -q '^rootdev=' /boot/armbianEnv.txt || echo "rootdev=${rootdev}" >> /boot/armbianEnv.txt
+					grep -q '^rootfstype=' /boot/armbianEnv.txt || echo "rootfstype=${rootfstype}" >> /boot/armbianEnv.txt
+				fi
 			fi
 			if [[ ${capture_rv110x_bootargs} == "yes" ]]; then
 				sed -i '/^rv110x_bootargs=/d' /boot/armbianEnv.txt
