@@ -1,0 +1,46 @@
+name: Build Armbian with Userpatches
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - luckfox-pico-max
+          - luckfox-pico-mini
+
+    steps:
+      - name: Checkout integration repo
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Compile ${{ matrix.config }} image
+        working-directory: build
+        shell: bash
+        run: >
+          ./compile.sh build ${{ matrix.config }}
+          PREFER_DOCKER=yes
+          KERNEL_CONFIGURE=no
+          SHARE_LOGS=no
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.config }}
+          path: build/output/images/*

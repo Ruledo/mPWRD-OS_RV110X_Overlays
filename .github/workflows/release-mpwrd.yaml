@@ -1,0 +1,42 @@
+name: Release mPWRD-OS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-armbian.yaml
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Get Version
+        id: version
+        run: echo "mpwrd=$(cat build/userpatches/mPWRD-VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+          path: build/output/images/
+
+      - name: List Downloaded Artifacts
+        run: ls -lah build/output/images/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            build/output/images/*.img.xz
+            build/output/images/*.img.xz.sha
+            build/output/images/*.img.txt
+          draft: true
+          prerelease: true
+          name: mPWRD-OS RV110x Overlay ${{ steps.version.outputs.mpwrd }} Alpha
+          tag_name: rv110x-v${{ steps.version.outputs.mpwrd }}
