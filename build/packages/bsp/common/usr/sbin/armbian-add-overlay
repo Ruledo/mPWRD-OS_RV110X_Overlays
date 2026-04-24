@@ -40,6 +40,23 @@ fi
 extlinux_conf="/boot/extlinux/extlinux.conf"
 bootscript_overlay_mode="false"
 rv110x_direct_env_mode="false"
+explicit_armbian_env_overlay_mode="false"
+
+get_armbian_env_value() {
+	local key="$1"
+	if [[ -f /boot/armbianEnv.txt ]]; then
+		sed -n "s/^${key}=//p" /boot/armbianEnv.txt | head -n 1
+	fi
+}
+
+boot_overlay_mode="${BOOT_OVERLAY_MODE:-}"
+if [[ -z "${boot_overlay_mode}" ]]; then
+	boot_overlay_mode="$(get_armbian_env_value boot_overlay_mode)"
+fi
+
+if [[ "${boot_overlay_mode}" == "armbianEnv" ]]; then
+	explicit_armbian_env_overlay_mode="true"
+fi
 
 if [[ -f /boot/boot.cmd ]] && grep -q '^setenv overlay_error' /boot/boot.cmd; then
 	bootscript_overlay_mode="true"
@@ -67,7 +84,9 @@ enable_extlinux_overlay() {
 	fi
 }
 
-if [[ ${bootscript_overlay_mode} == "true" || ${rv110x_direct_env_mode} == "true" ]] && [[ -f /boot/armbianEnv.txt ]]; then
+if [[ ${explicit_armbian_env_overlay_mode} == "true" ]] && [[ -f /boot/armbianEnv.txt ]]; then
+	boot_mode="armbianEnv"
+elif [[ ${bootscript_overlay_mode} == "true" || ${rv110x_direct_env_mode} == "true" ]] && [[ -f /boot/armbianEnv.txt ]]; then
 	boot_mode="armbianEnv"
 elif [[ -f "${extlinux_conf}" ]]; then
 	boot_mode="extlinux"
@@ -78,7 +97,7 @@ else
 	exit -1
 fi
 
-if [[ ${boot_mode} == "armbianEnv" ]] && [[ ${bootscript_overlay_mode} != "true" ]] && [[ ${rv110x_direct_env_mode} != "true" ]]; then
+if [[ ${boot_mode} == "armbianEnv" ]] && [[ ${explicit_armbian_env_overlay_mode} != "true" ]] && [[ ${bootscript_overlay_mode} != "true" ]] && [[ ${rv110x_direct_env_mode} != "true" ]]; then
 	echo >&2 "Overlays are not supported on ${LINUXFAMILY^} based boards."
 	exit -1
 fi
