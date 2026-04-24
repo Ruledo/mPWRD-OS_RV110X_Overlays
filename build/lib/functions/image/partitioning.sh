@@ -440,12 +440,24 @@ function prepare_partitions() {
 	# stage: adjust boot script or boot environment
 	if [[ -f $SDCARD/boot/armbianEnv.txt ]]; then
 		display_alert "Found armbianEnv.txt" "${SDCARD}/boot/armbianEnv.txt" "debug"
-		if [[ $CRYPTROOT_ENABLE == yes ]]; then
-			echo "rootdev=$rootdevice cryptdevice=UUID=${physical_root_part_uuid}:$CRYPTROOT_MAPPER" >> "${SDCARD}/boot/armbianEnv.txt"
+		if grep -q '^boot_overlay_mode=armbianEnv$' "${SDCARD}/boot/armbianEnv.txt"; then
+			if [[ $CRYPTROOT_ENABLE == yes ]]; then
+				sed -i "s|^rootdev=.*|rootdev=$rootdevice cryptdevice=UUID=${physical_root_part_uuid}:$CRYPTROOT_MAPPER|" "${SDCARD}/boot/armbianEnv.txt"
+				grep -q '^rootdev=' "${SDCARD}/boot/armbianEnv.txt" || echo "rootdev=$rootdevice cryptdevice=UUID=${physical_root_part_uuid}:$CRYPTROOT_MAPPER" >> "${SDCARD}/boot/armbianEnv.txt"
+			else
+				sed -i "s|^rootdev=.*|rootdev=$rootfs|" "${SDCARD}/boot/armbianEnv.txt"
+				grep -q '^rootdev=' "${SDCARD}/boot/armbianEnv.txt" || echo "rootdev=$rootfs" >> "${SDCARD}/boot/armbianEnv.txt"
+			fi
+			sed -i "s|^rootfstype=.*|rootfstype=$ROOTFS_TYPE|" "${SDCARD}/boot/armbianEnv.txt"
+			grep -q '^rootfstype=' "${SDCARD}/boot/armbianEnv.txt" || echo "rootfstype=$ROOTFS_TYPE" >> "${SDCARD}/boot/armbianEnv.txt"
 		else
-			echo "rootdev=$rootfs" >> "${SDCARD}/boot/armbianEnv.txt"
+			if [[ $CRYPTROOT_ENABLE == yes ]]; then
+				echo "rootdev=$rootdevice cryptdevice=UUID=${physical_root_part_uuid}:$CRYPTROOT_MAPPER" >> "${SDCARD}/boot/armbianEnv.txt"
+			else
+				echo "rootdev=$rootfs" >> "${SDCARD}/boot/armbianEnv.txt"
+			fi
+			echo "rootfstype=$ROOTFS_TYPE" >> $SDCARD/boot/armbianEnv.txt
 		fi
-		echo "rootfstype=$ROOTFS_TYPE" >> $SDCARD/boot/armbianEnv.txt
 	elif [[ $rootpart != 1 ]] && [[ $SRC_EXTLINUX != yes ]]; then
 		echo "rootfstype=$ROOTFS_TYPE" >> "${SDCARD}/boot/armbianEnv.txt"
 	elif [[ $rootpart != 1 && $SRC_EXTLINUX != yes && -f "${SDCARD}/boot/${bootscript_dst}" ]]; then
