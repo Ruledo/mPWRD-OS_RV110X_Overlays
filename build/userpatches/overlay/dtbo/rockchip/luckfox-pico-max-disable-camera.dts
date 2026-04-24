@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Disable the onboard camera sensors and CSI path on Luckfox Pico Max.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	metadata {
+		title = "Disable camera on Luckfox Pico Max";
+		compatible = "rockchip,rv1106g3";
+		category = "camera";
+		description = "Disable the default camera sensors and their CSI pipeline.";
+	};
+};
+
+&sc3336 {
+	status = "disabled";
+};
+
+&mis5001 {
+	status = "disabled";
+};
+
+&csi2_dphy0 {
+	status = "disabled";
+};
+
+&csi2_dphy_hw {
+	status = "disabled";
+};
+
+&mipi0_csi2 {
+	status = "disabled";
+};
+
+&mipi0_csi2_hw {
+	status = "disabled";
+};

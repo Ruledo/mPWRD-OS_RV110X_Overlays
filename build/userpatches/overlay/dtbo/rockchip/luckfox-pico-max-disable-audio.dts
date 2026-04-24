@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Disable the onboard analog audio path on Luckfox Pico Max.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	metadata {
+		title = "Disable audio on Luckfox Pico Max";
+		compatible = "rockchip,rv1106g3";
+		category = "audio";
+		description = "Disable the RV1106 codec and simple-audio-card nodes.";
+	};
+};
+
+&acodec {
+	status = "disabled";
+};
+
+&acodec_sound {
+	status = "disabled";
+};

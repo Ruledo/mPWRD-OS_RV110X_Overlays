@@ -87,36 +87,101 @@ InstallPipxPkg() {
 	# --global flag requires pipx 1.5.0 or newer
 } # InstallPipxPkg
 
+GetDTBOSourceDirs() {
+	local family_dir="/tmp/overlay/dtbo/${LINUXFAMILY}"
+	local base_family="${LINUXFAMILY%%-*}"
+	local base_dir="/tmp/overlay/dtbo/${base_family}"
+	if [ -d "${base_dir}" ] && [ "${base_dir}" != "${family_dir}" ]; then
+		printf '%s\n' "${base_dir}"
+	fi
+	if [ -d "${family_dir}" ]; then
+		printf '%s\n' "${family_dir}"
+	fi
+} # GetDTBOSourceDirs
+
 CompileDTBO() {
+	local dtbo_dir
+	local -a dtbo_dirs=()
 	# Always compile DTBOs for each family (even if not enabled by default)
 	mkdir -p /boot/overlay-user
 	echo "Compiling mPWRD device tree overlays for ${LINUXFAMILY}"
-	echo "located in overlay/dtbo/${LINUXFAMILY}"
+	while IFS= read -r dtbo_dir; do
+		if [ -n "${dtbo_dir}" ]; then
+			dtbo_dirs+=("${dtbo_dir}")
+		fi
+	done < <(GetDTBOSourceDirs)
+	if [ ${#dtbo_dirs[@]} -eq 0 ]; then
+		echo "No overlay sources found for ${LINUXFAMILY}"
+		return 0
+	fi
 	shopt -s nullglob
 	# If *.dts returns no results, the loop will not execute (desired behavior)
-	for f in /tmp/overlay/dtbo/"${LINUXFAMILY}"/*.dts; do
-		DTBO_NAME=$(basename "${f}" .dts)
-		echo "Compiling ${DTBO_NAME}"
-		dtc -@ -q -I dts -O dtb -o "/boot/overlay-user/${DTBO_NAME}.dtbo" "${f}"
+	for dtbo_dir in "${dtbo_dirs[@]}"; do
+		echo "Scanning ${dtbo_dir}"
+		for f in "${dtbo_dir}"/*.dts; do
+			DTBO_NAME=$(basename "${f}" .dts)
+			echo "Compiling ${DTBO_NAME}"
+			dtc -@ -q -I dts -O dtb -o "/boot/overlay-user/${DTBO_NAME}.dtbo" "${f}"
+		done
 	done
 	shopt -u nullglob
 } # CompileDTBO
 
+EnableExtlinuxUserOverlays() {
+	local extlinux_conf="/boot/extlinux/extlinux.conf"
+	local overlay_name
+	local overlay_path
+	local extlinux_pattern='^[[:space:]]*fdt(dir)?[[:space:]]'
+	local -a overlay_paths=()
+	if [ ! -f "${extlinux_conf}" ]; then
+		echo "Warning: ${extlinux_conf} not found, cannot enable device tree overlays"
+		return 1
+	fi
+	for overlay_name in "$@"; do
+		overlay_paths+=("/boot/overlay-user/${overlay_name}.dtbo")
+	done
+	if grep -Eq '^[[:space:]]*fdtoverlays[[:space:]]' "${extlinux_conf}"; then
+		for overlay_path in "${overlay_paths[@]}"; do
+			if ! grep -Fq "${overlay_path}" "${extlinux_conf}"; then
+				sed -i "/^[[:space:]]*fdtoverlays[[:space:]]/ s|\$| ${overlay_path}|" "${extlinux_conf}"
+			fi
+		done
+	elif grep -Eq "${extlinux_pattern}" "${extlinux_conf}"; then
+		sed -Ei "/${extlinux_pattern}/a\\  fdtoverlays ${overlay_paths[*]}" "${extlinux_conf}"
+	else
+		echo "  fdtoverlays ${overlay_paths[*]}" >> "${extlinux_conf}"
+	fi
+} # EnableExtlinuxUserOverlays
+
+ShouldUseArmbianEnvUserOverlays() {
+	if [ -f /boot/boot.cmd ] && grep -q '^setenv overlay_error' /boot/boot.cmd; then
+		return 0
+	fi
+	if [ -f /boot/armbianEnv.txt ] && [ "${LINUXFAMILY}" = "rockchip-rv1106" ]; then
+		return 0
+	fi
+	return 1
+} # ShouldUseArmbianEnvUserOverlays
+
 EnableUserDTOverlay() {
-	USER_OVERLAYS="$1"
-	echo "Enabling user_overlays: ${USER_OVERLAYS}"
+	local user_overlays="$1"
+	local -a overlay_names=()
+	echo "Enabling user_overlays: ${user_overlays}"
+	read -r -a overlay_names <<< "${user_overlays}"
 	# Enable overlays (space separated)
-	# in /boot/armbianEnv.txt
-	if [ -f /boot/armbianEnv.txt ]; then
+	# in /boot/armbianEnv.txt or /boot/extlinux/extlinux.conf
+	if ShouldUseArmbianEnvUserOverlays; then
 		if grep -q "user_overlays=" /boot/armbianEnv.txt; then
 			# Append to existing user_overlays
-			sed -i "s/user_overlays=\(.*\)/user_overlays=\1 ${USER_OVERLAYS}/" /boot/armbianEnv.txt
+			sed -i "s/user_overlays=\(.*\)/user_overlays=\1 ${user_overlays}/" /boot/armbianEnv.txt
 		else
 			# Add new user_overlays line
-			echo "user_overlays=${USER_OVERLAYS}" >> /boot/armbianEnv.txt
+			echo "user_overlays=${user_overlays}" >> /boot/armbianEnv.txt
 		fi
+	elif [ -f /boot/extlinux/extlinux.conf ]; then
+		EnableExtlinuxUserOverlays "${overlay_names[@]}"
 	else
-		echo "Warning: /boot/armbianEnv.txt not found, cannot enable device tree overlays"
+		echo "Warning: no supported boot config found, cannot enable device tree overlays"
 	fi
 } # EnableUserDTOverlay
 

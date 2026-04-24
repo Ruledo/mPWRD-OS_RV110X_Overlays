@@ -313,10 +313,17 @@ function get_bootscript_info() {
 		bootscript_info[bootenv_file_fullpath]=""
 		bootscript_info[has_bootenv]="no"
 		bootscript_info[bootenv_file_contents]=""
-		if [[ -n $BOOTENV_FILE && -f $SRC/config/bootenv/$BOOTENV_FILE ]]; then
-			bootscript_info[has_bootenv]="yes"
-			bootscript_info[bootenv_file_fullpath]="${SRC}/config/bootenv/${BOOTENV_FILE}"
-			bootscript_info[bootenv_file_contents]="$(cat "${SRC}/config/bootenv/${BOOTENV_FILE}")"
+		if [[ -n $BOOTENV_FILE ]]; then
+			if [[ -f "${USERPATCHES_PATH}/bootenv/${BOOTENV_FILE}" ]]; then
+				bootscript_info[has_bootenv]="yes"
+				bootscript_info[bootenv_file_fullpath]="${USERPATCHES_PATH}/bootenv/${BOOTENV_FILE}"
+			elif [[ -f "${SRC}/config/bootenv/${BOOTENV_FILE}" ]]; then
+				bootscript_info[has_bootenv]="yes"
+				bootscript_info[bootenv_file_fullpath]="${SRC}/config/bootenv/${BOOTENV_FILE}"
+			fi
+			if [[ ${bootscript_info[has_bootenv]} == "yes" ]]; then
+				bootscript_info[bootenv_file_contents]="$(cat "${bootscript_info[bootenv_file_fullpath]}")"
+			fi
 		fi
 	elif [[ $SRC_EXTLINUX == yes ]]; then
 		bootscript_info[has_extlinux]="yes"
@@ -337,14 +344,49 @@ function board_side_bsp_cli_postinst_update_uboot_bootscript() {
 
 		echo "Recreating boot script"
 		cp -v /usr/share/armbian/${BOOTSCRIPT_DST} /boot
-		rootdev=$(sed -e 's/^.*root=//' -e 's/ .*\$//' < /proc/cmdline)
-		rootfstype=$(sed -e 's/^.*rootfstype=//' -e 's/ .*$//' < /proc/cmdline)
+		rootdev=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^root=//p' | head -n 1)
+		rootfstype=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^rootfstype=//p' | head -n 1)
+		[[ -z "${rootfstype}" ]] && rootfstype="ext4"
 
-		# recreate armbianEnv.txt if it and extlinux does not exists
-		if [[ ! -f /boot/armbianEnv.txt && ! -f /boot/extlinux/extlinux.conf ]]; then
+		rootdev_is_bootable="no"
+		case "${rootdev}" in
+			UUID=* | PARTUUID=* | /dev/mmcblk* | /dev/nvme* | /dev/sd*)
+				rootdev_is_bootable="yes"
+				;;
+		esac
+
+		capture_rv110x_bootargs="no"
+		if [[ ${LINUXFAMILY:-} == rockchip-rv1106 || ${BOARDFAMILY:-} == rockchip-rv1106 ]]; then
+			if [[ -r /proc/device-tree/compatible ]] && grep -aqE 'rockchip,rv110(3|6)' /proc/device-tree/compatible; then
+				capture_rv110x_bootargs="yes"
+			fi
+		fi
+
+		rv110x_bootargs=""
+		if [[ ${capture_rv110x_bootargs} == "yes" ]]; then
+			rv110x_bootargs=$(sed -E \
+				-e 's/(^| )androidboot\.fwver=[^ ]+//g' \
+				-e 's/(^| )user_debug=[^ ]+//g' \
+				-e 's/(^| )rv110x_stage=[^ ]*//g' \
+				-e 's/[[:space:]]+/ /g' \
+				-e 's/^ //; s/ $//' /proc/cmdline)
+		fi
+
+		# create armbianEnv.txt from the packaged bootenv when switching from extlinux
+		if [[ ! -f /boot/armbianEnv.txt && -f /usr/share/armbian/armbianEnv.txt ]]; then
 			cp -v /usr/share/armbian/armbianEnv.txt /boot
-			echo "rootdev="\$rootdev >> /boot/armbianEnv.txt
-			echo "rootfstype="\$rootfstype >> /boot/armbianEnv.txt
+		fi
+		if [[ -f /boot/armbianEnv.txt ]]; then
+			if [[ ${rootdev_is_bootable} == "yes" ]]; then
+				sed -i "s|^rootdev=\\\$rootdev\$|rootdev=${rootdev}|" /boot/armbianEnv.txt
+				sed -i "s|^rootfstype=\\\$rootfstype\$|rootfstype=${rootfstype}|" /boot/armbianEnv.txt
+				grep -q '^rootdev=' /boot/armbianEnv.txt || echo "rootdev=${rootdev}" >> /boot/armbianEnv.txt
+				grep -q '^rootfstype=' /boot/armbianEnv.txt || echo "rootfstype=${rootfstype}" >> /boot/armbianEnv.txt
+			fi
+			if [[ ${capture_rv110x_bootargs} == "yes" ]]; then
+				sed -i '/^rv110x_bootargs=/d' /boot/armbianEnv.txt
+				printf 'rv110x_bootargs=%s\n' "${rv110x_bootargs}" >> /boot/armbianEnv.txt
+			fi
 		fi
 
 		# update boot.ini if it exists? @TODO: why? who uses this?
