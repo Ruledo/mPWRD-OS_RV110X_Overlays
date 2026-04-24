@@ -1,0 +1,4 @@
+# Armbian MOTD configuration
+
+# Disable Armbian 'header' and 'tips' -- replaced with mpwrd-header
+MOTD_DISABLE="clear header tips commands"
