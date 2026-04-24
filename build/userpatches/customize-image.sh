@@ -160,14 +160,15 @@ ShouldUseArmbianEnvUserOverlays() {
 	if [ -f /boot/armbianEnv.txt ] && grep -q '^boot_overlay_mode=armbianEnv$' /boot/armbianEnv.txt; then
 		return 0
 	fi
-	if [ -f /boot/boot.cmd ] && grep -q '^setenv overlay_error' /boot/boot.cmd; then
-		return 0
-	fi
-	if [ -f /boot/armbianEnv.txt ] && [ "${LINUXFAMILY}" = "rockchip-rv1106" ]; then
+	if HasLegacyBootscriptOverlayMode; then
 		return 0
 	fi
 	return 1
 } # ShouldUseArmbianEnvUserOverlays
+
+HasLegacyBootscriptOverlayMode() {
+	[ -f /boot/boot.cmd ] && grep -q '^setenv overlay_error' /boot/boot.cmd
+} # HasLegacyBootscriptOverlayMode
 
 EnsureArmbianEnvListContains() {
 	local key="$1"
